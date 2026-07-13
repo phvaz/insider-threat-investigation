@@ -13,6 +13,8 @@
 
 This case involved only a single examiner throughout, working within an isolated local lab environment. No third party had access to the target VM, the investigator VM, or any evidence file at any point.
 
+> **Standards note.** This chain of custody is maintained in accordance with **ISO/IEC 27037** (identification, collection, acquisition and preservation of digital evidence) and **NIST SP 800-86** (integrating forensic techniques into incident response). The acquisition order — volatile memory captured before the disk, and before shutdown — follows the **order of volatility** defined in **RFC 3227** (Guidelines for Evidence Collection and Archiving). All evidence integrity is established and re-verifiable through the MD5 and SHA-256 hashes recorded below.
+
 ---
 
 ## Evidence Items

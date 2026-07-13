@@ -2,7 +2,9 @@
 
 ## Objective
 
-Analyze the forensic disk image (`NEXCHAIN-WS01-DISK01.E01`, acquired in Phase 02) to independently corroborate the attacker's actions documented in the sealed log from Phase 00 and recovered from memory in Phase 03 — this time from the persistent, non-volatile evidence layer: the file system itself. Specifically, this phase set out to (1) confirm or refute recoverability of the deleted original file, (2) prove the file's prior existence through file-system-level artifacts even where direct recovery failed, (3) determine the true nature of the simulated USB device, (4) recover any surviving command history from disk, and (5) technically verify the timestomping attempt at the NTFS metadata level.
+Analyze the forensic disk image (`NEXCHAIN-WS01-DISK01.E01`, acquired in Phase 02) to independently corroborate the attacker's actions documented in the sealed log from Phase 01 and recovered from memory in Phase 03 — this time from the persistent, non-volatile evidence layer: the file system itself. Specifically, this phase set out to (1) confirm or refute recoverability of the deleted original file, (2) prove the file's prior existence through file-system-level artifacts even where direct recovery failed, (3) determine the true nature of the simulated USB device, (4) recover any surviving command history from disk, and (5) technically verify the timestomping attempt at the NTFS metadata level.
+
+> **Standards note.** Disk analysis is governed by **ISO/IEC 27042** (analysis and interpretation of digital evidence). The deliberate use of multiple independent tools and artifact sources to confirm each finding — for example, corroborating tool execution across Prefetch, command history, and memory — reflects **ISO/IEC 27041** (assurance of the suitability and adequacy of the investigative method).
 
 ---
 
@@ -16,7 +18,7 @@ sudo ewfmount /mnt/evidence-storage/NEXCHAIN-WS01-DISK01.E01 ~/mnt_ewf
 sudo mmls ~/mnt_ewf/ewf1
 ```
 
-The partition table confirmed the same layout already documented in Phase 01/02: a ~50 MiB EFI/reserved partition, the ~49.4 GiB main NTFS partition (offset 104448 sectors → byte offset 53,477,376), and a ~519 MiB recovery partition.
+The partition table confirmed the same layout already documented in Phase 00/02: a ~50 MiB EFI/reserved partition, the ~49.4 GiB main NTFS partition (offset 104448 sectors → byte offset 53,477,376), and a ~519 MiB recovery partition.
 
 ```bash
 sudo mkdir -p /mnt/ntfs_analysis
@@ -33,7 +35,7 @@ Mounting was performed **read-only** at every layer (`ewfmount` default, explici
 
 ## Step 2 — Confirming the File Is No Longer Visible
 
-Before attempting recovery, the analyst01 Documents folder was inspected directly to confirm the file was absent from the active, visible file system — the expected outcome given SDelete was used in Phase 00.
+Before attempting recovery, the analyst01 Documents folder was inspected directly to confirm the file was absent from the active, visible file system — the expected outcome given SDelete was used in Phase 01.
 
 ```bash
 ls -la "/mnt/ntfs_analysis/Users/analyst01/Documents/"
@@ -131,7 +133,7 @@ This was, in fact, the **first event in the entire log** — confirming the log 
 - **Timestamp:** `2026-07-04 15:20:54.560593 UTC`
 - **ClientProcessId:** `7812`
 
-This matches the `wevtutil cl Security` action documented in the Phase 00 sealed log and independently corroborates the actor (admin, not analyst01) responsible for that specific step.
+This matches the `wevtutil cl Security` action documented in the Phase 01 sealed log and independently corroborates the actor (admin, not analyst01) responsible for that specific step.
 
 **Follow-up check:** since the second PowerShell session (analyst01, 15:26:06 UTC per Phase 03) began *after* the log was cleared, a targeted search was run for Event ID 4688 (process creation) referencing SDelete, to see if its execution had been captured post-clear:
 
@@ -139,7 +141,7 @@ This matches the `wevtutil cl Security` action documented in the Phase 00 sealed
 grep -B5 -A20 "EventID>4688" ~/security_evtx_parsed.xml | grep -A20 "sdelete\|SDelete"
 ```
 
-No match was found. This is not a gap in the investigation — process-creation auditing (4688) is disabled by default in Windows and was not explicitly enabled during the Phase 01 environment setup, so its absence here is expected and was documented as such rather than treated as inconclusive.
+No match was found. This is not a gap in the investigation — process-creation auditing (4688) is disabled by default in Windows and was not explicitly enabled during the Phase 00 environment setup, so its absence here is expected and was documented as such rather than treated as inconclusive.
 
 ---
 
@@ -174,7 +176,7 @@ Three entries were found:
 - `Disk&Ven_VBOX&Prod_HARDDISK` — the VM's main disk, emulated as hardware by VirtualBox (vendor: VBOX)
 - **`Disk&Ven_Msft&Prod_Virtual_Disk`** — a disk whose reported vendor is **Microsoft**, not VirtualBox
 
-This is the decisive artifact: the vendor string in a SCSI enumeration entry reflects who created the device at the point of attachment. A device emulated by the hypervisor reports as `VBOX`; a virtual disk created and mounted by the Windows Virtual Disk Service (the mechanism behind `diskpart create vdisk` / `attach vdisk`, used in Phase 00) reports as `Msft`. The presence of this entry — combined with the complete absence of any USBSTOR entry — conclusively demonstrates the "USB pendrive" was a VHD attached internally via the OS, not a physical or passthrough USB device.
+This is the decisive artifact: the vendor string in a SCSI enumeration entry reflects who created the device at the point of attachment. A device emulated by the hypervisor reports as `VBOX`; a virtual disk created and mounted by the Windows Virtual Disk Service (the mechanism behind `diskpart create vdisk` / `attach vdisk`, used in Phase 01) reports as `Msft`. The presence of this entry — combined with the complete absence of any USBSTOR entry — conclusively demonstrates the "USB pendrive" was a VHD attached internally via the OS, not a physical or passthrough USB device.
 
 ---
 

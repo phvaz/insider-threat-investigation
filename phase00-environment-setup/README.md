@@ -137,6 +137,8 @@ Before any attack simulation or evidence generation, a snapshot of the clean Win
 
 This snapshot is the forensic baseline for the investigation. All evidence generated during the attack simulation (Phase 01) will exist in the differential VDI created after this snapshot, not in the base disk — a lesson explicitly learned and documented during the BitTorrent DFIR investigation (BTD-2026-001).
 
+> **Standards note.** Establishing a preserved, unmodified baseline before any evidence-generating activity supports the preservation and integrity principles of **ISO/IEC 27037** (identification, collection, acquisition and preservation of digital evidence). The clean snapshot provides a known-good reference state against which all later changes can be measured.
+
 ---
 
 ## Volatility 3 — Installation on Investigator VM

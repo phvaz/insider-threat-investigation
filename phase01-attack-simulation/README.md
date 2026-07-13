@@ -1,207 +1,197 @@
-# Phase 02 — Forensic Acquisition
+# Phase 01 — Attack Simulation
 
 ## Objective
 
-Acquire a forensically sound disk image of the target machine's post-attack state, with cryptographic hash verification, establishing the chain of custody for all subsequent analysis phases. The memory dump was already acquired in Phase 01, immediately before shutdown; this phase focuses on disk acquisition.
+Simulate the actions of a malicious insider — a compliance analyst at NexChain Exchange — exfiltrating customer KYC data to an external device and attempting to cover their tracks using anti-forensic techniques. All actions were performed from the attacker's perspective and documented in a sealed, GPG-encrypted log, kept separate from the investigation itself to preserve investigator objectivity (blind analysis, compared against findings in Phase 07).
+
+This phase departs from every previous project in the portfolio: instead of generating evidence and immediately investigating it, the investigator (Paulo Vaz) intentionally created a gap between the attacker's actions and the forensic analysis. What was found — and what was missed — becomes part of the final report.
 
 ---
 
-## Step 1 — Resolving the Snapshot Chain
+## Attacker Context
 
-VirtualBox stores differential snapshots as a chain of dependent VDI files — evidence generated after a snapshot lives in the newest differential disk, not in the base VDI. This was a lesson already learned and documented during the BitTorrent DFIR investigation (BTD-2026-001), and it applied here as well.
+| Field | Value |
+|---|---|
+| Account used | `analyst01` (standard user, no admin privileges) |
+| Target VM | `windows-10-dfir-target` (NEXCHAIN-WS01) |
+| Scenario | Compliance analyst exfiltrating KYC data prior to resignation |
+| Simulated external device | VHD mounted as removable disk (`E:\`, label `PENDRIVE`) |
+| Anti-forensic tools used | SDelete (Sysinternals), `wevtutil`, PowerShell timestomping |
 
-Inspecting the `.vbox` file confirmed the disk chain:
+> **Standards note.** This phase is executed from the **attacker's perspective** — it generates the incident rather than investigating it. The forensic standards that govern the rest of this project (ISO/IEC 27037, 27041, 27042, etc.) apply to the *investigation* of evidence, not to its creation, and therefore do not apply here. One regulatory dimension is, however, relevant: the data handled in this scenario — customer names, Brazilian national identifiers (CPF), and cryptocurrency wallet addresses — constitutes **personal data** under Brazil's **LGPD** (Lei Geral de Proteção de Dados). The simulated exfiltration recreates precisely the kind of personal-data breach the LGPD regulates, which is what gives the downstream investigation its regulatory significance (developed further in the forensic report and the final project README).
+
+---
+
+## Step 1 — Simulated Removable Device (VHD)
+
+A 1GB dynamic VHD was created and mounted directly inside the target VM (not shared from the host) to generate authentic removable-device artifacts in the Windows Registry (`USBSTOR`, `MountedDevices`) — exactly what the investigator will look for in Phase 04.
 
 ```
-windows-10-dfir-target_.vdi                              (base)
-  └── Snapshots/{a7f1ed58-...}.vdi                        (after "clean-install")
-        └── Snapshots/{8a414448-...}.vdi                  (after "post-attack")
+diskpart
+create vdisk file="C:\Tools\pendrive.vhd" maximum=1024 type=expandable
+select vdisk file="C:\Tools\pendrive.vhd"
+attach vdisk
+create partition primary
+format fs=ntfs quick label="PENDRIVE"
+assign
 ```
 
-The `post-attack` snapshot corresponds to the top of this chain (`{8a414448-...}.vdi`). Rather than working with the fragile differential files directly, the full chain was consolidated into a single, independent VDI using `VBoxManage clonemedium`, run from the host:
+Result: volume `E:` (`PENDRIVE`, NTFS, 1022 MB) mounted and ready.
+
+---
+
+## Step 2 — KYC Data Creation and Exfiltration
+
+A fictitious KYC dataset (customer names, fake CPFs, fake wallet addresses, emails) was generated directly inside the `analyst01` session — not transferred from the host — so that file creation metadata is consistent with genuine on-machine activity rather than artifacts of a file transfer.
 
 ```powershell
-& "C:\Program Files\Oracle\VirtualBox\VBoxManage.exe" clonemedium disk "{8a414448-73f2-4166-b7ea-f94814d33f5c}" "C:\Tools\post-attack-consolidated.vdi" --format VDI
+$csv = "nome,cpf,wallet_address,email`n..."
+Set-Content -Path "C:\Users\analyst01\Documents\kyc_customers.csv" -Value $csv -Encoding utf8
 ```
 
-Result: `post-attack-consolidated.vdi`, 22,340,960,256 bytes (~20.8 GiB actual data on a 50 GiB virtual disk).
+![CSV created in analyst01's Documents folder](screenshots/01-kyc-csv-created.png)
 
-This clone was made accessible to the Kali investigator VM via a **read-only** VirtualBox shared folder, protecting the original evidence chain from any accidental modification during acquisition:
-
-```bash
-qemu-img info /mnt/iti-evidence/post-attack-consolidated.vdi
-```
-
-![qemu-img info confirming the consolidated source disk](screenshots/01-qemu-img-info-source.png)
-
----
-
-## Step 2 — Direct Block-Device Access via qemu-nbd
-
-Rather than converting the VDI to a raw file first (which would require 50 GiB of scratch space), the consolidated VDI was mounted directly as a read-only block device using `qemu-nbd`. This is closer to how professional acquisition tools handle source media, and `ewfacquire` can read directly from a block device.
-
-```bash
-sudo modprobe nbd max_part=8
-sudo qemu-nbd --read-only -c /dev/nbd0 /mnt/iti-evidence/post-attack-consolidated.vdi
-lsblk /dev/nbd0
-```
-
-![VDI connected via qemu-nbd, three partitions visible](screenshots/02-nbd-connect-partitions.png)
-
-The three partitions (50 MiB EFI/reserved, 49.4 GiB main NTFS, 519 MiB recovery) match the layout already documented in Phase 00.
-
----
-
-## Step 3 — Troubleshooting: Shared Folder I/O Instability
-
-The first two acquisition attempts, targeting the VirtualBox shared folder as the output destination, failed partway through:
-
-**Attempt 1** — default 1.4 GiB segment size, failed at ~2% while writing the second segment file:
-
-```
-Acquiry failed at: Jul 06, 2026 11:31:05
-Unable to acquire input.
-libewf_segment_file_write_chunk: unable to write chunk: 44017 data.
-```
-
-**Attempt 2** — single 60 GiB segment (ruling out segment-boundary issues), failed again at ~7%:
-
-```
-Acquiry failed at: Jul 06, 2026 12:30:00
-Unable to acquire input.
-libewf_segment_file_write_chunk: unable to write chunk: 120701 data.
-```
-
-Free space on the shared folder was not the cause (278 GiB available). The consistent pattern — failure mid-write regardless of segment size — pointed to instability in the `vboxsf` shared-folder protocol under sustained, high-volume write operations, rather than a configuration or space problem.
-
-**Resolution:** a dedicated 60 GiB virtual disk was created and attached directly to the Kali investigator VM (local block storage, bypassing the shared-folder layer entirely for writes):
+The file was then copied to the simulated external device:
 
 ```powershell
-& "C:\Program Files\Oracle\VirtualBox\VBoxManage.exe" createmedium disk --filename "C:\Tools\evidence-storage.vdi" --size 61440 --format VDI
-& "C:\Program Files\Oracle\VirtualBox\VBoxManage.exe" controlvm "kali-linux-2026.1-virtualbox-amd64" poweroff
-& "C:\Program Files\Oracle\VirtualBox\VBoxManage.exe" storagectl "kali-linux-2026.1-virtualbox-amd64" --name "SATA" --portcount 2
-& "C:\Program Files\Oracle\VirtualBox\VBoxManage.exe" storageattach "kali-linux-2026.1-virtualbox-amd64" --storagectl "SATA" --port 1 --device 0 --type hdd --medium "C:\Tools\evidence-storage.vdi"
+Copy-Item -Path "C:\Users\analyst01\Documents\kyc_customers.csv" -Destination "E:\kyc_customers.csv"
 ```
 
-Formatted and mounted inside Kali:
+![File copied to E:\ (simulated pendrive)](screenshots/02-copy-to-pendrive.png)
 
-```bash
-sudo mkfs.ext4 /dev/sdb
-sudo mkdir -p /mnt/evidence-storage
-sudo mount /dev/sdb /mnt/evidence-storage
-```
+Baseline timestamps of the file (before any anti-forensic tampering) were recorded for later comparison:
 
-![Full disk layout — evidence disk (sdb) mounted alongside the NBD-connected source (nbd0)](screenshots/03-evidence-disk-attached.png)
-
-This local disk became the acquisition destination for all subsequent attempts, resolving the I/O failures entirely.
+![kyc_customers.csv properties — baseline timestamps](screenshots/03-kyc-file-properties-baseline.png)
 
 ---
 
-## Step 4 — Disk Acquisition (E01)
+## Step 3 — Anti-Forensic Countermeasures
 
-With the source (`/dev/nbd0`, read-only) and destination (`/mnt/evidence-storage`, local ext4) both stable, the acquisition was run with `ewfacquire`:
+Three anti-forensic techniques were applied, simulating an attacker attempting to cover their tracks.
 
-```bash
-sudo ewfacquire /dev/nbd0
+### 3.1 — Secure deletion (SDelete)
+
+The original file in `Documents` was securely deleted (1-pass overwrite) using Sysinternals SDelete:
+
+```powershell
+C:\Tools\SDelete\sdelete64.exe -accepteula "C:\Users\analyst01\Documents\kyc_customers.csv"
 ```
 
-| Parameter | Value |
+![SDelete execution and confirmation of removal](screenshots/04-sdelete-execution.png)
+
+### 3.2 — Windows Event Log clearing attempt
+
+The Security event log was cleared using `wevtutil`, executed with administrator privileges:
+
+```powershell
+wevtutil cl Security
+```
+
+![wevtutil clearing the Security event log](screenshots/05-wevtutil-clear-security-log.png)
+
+Note: this action, even if it succeeds in wiping the log's contents, generates **Event ID 1102** ("The audit log was cleared") — automatically logged by Windows itself. This is expected to become one of the key findings in Phase 05 (Anti-Forensic Analysis): the attacker's attempt to erase evidence is itself evidence.
+
+### 3.3 — Timestomping
+
+Timestamps of the copied file on `E:\` were altered to a false date, attempting to disguise when the exfiltration actually occurred:
+
+```powershell
+$file = Get-Item "E:\kyc_customers.csv"
+$file.CreationTime = "01/01/2024 08:00:00"
+$file.LastWriteTime = "01/01/2024 08:00:00"
+$file.LastAccessTime = "01/01/2024 08:00:00"
+```
+
+![Timestomping applied — timestamps altered to 01/01/2024](screenshots/06-timestomping-applied.png)
+
+This modifies the NTFS `$STANDARD_INFORMATION` ($SI) attribute, which is straightforward to alter via the Windows API. The `$FILE_NAME` ($FN) attribute, harder to tamper with, is expected to still reflect the true creation time — the $SI vs $FN discrepancy is the classic timestomping fingerprint to be confirmed in Phase 05.
+
+---
+
+## Step 4 — Sealed Attacker Log
+
+All actions above were documented in real time, with exact timestamps, in a plaintext log kept on the **host** (outside the VM) — deliberately separate from the investigator's future analysis.
+
+```
+11:45 - 04/07/2026
+"VHD montado como unidade E:, label PENDRIVE, 1022 MB"
+Comando usado (create vdisk + attach + create partition + format + assign)
+
+12:06 - 04/07/2026
+"Arquivo kyc_customers.csv copiado de Documents para E:\ (pendrive simulado)"
+
+12:16 - 04/07/2026
+"sdelete executado em C:\Users\analyst01\Documents\kyc_customers.csv (1 pass overwrite) — arquivo original removido"
+
+12:21 - 04/07/2026
+"wevtutil cl Security executado como admin — tentativa de limpar Event Log de Segurança"
+
+12:33 - 04/07/2026
+"Timestomping aplicado em E:\kyc_customers.csv — CreationTime/LastWriteTime/LastAccessTime alterados para 01/01/2024 08:00:00 (data falsa, tentativa de mascarar quando o arquivo foi copiado)"
+```
+
+The log was encrypted with GPG (AES256) immediately after the attack session:
+
+```powershell
+gpg --symmetric --cipher-algo AES256 "attacker-log.txt"
+```
+
+The resulting `.gpg` file was validated with a decrypt test to confirm it was readable and intact, then the unencrypted `.txt` original was permanently deleted — leaving only the sealed `.gpg` file in existence:
+
+```powershell
+gpg --decrypt "attacker-log.txt.gpg"
+Remove-Item "attacker-log.txt"
+```
+
+![GPG encryption of the attacker log, decrypt validation, and deletion of the plaintext original](screenshots/08-gpg-encrypt-log.png)
+
+> **Note on the validation screenshot:** the decrypt test in the screenshot above briefly displayed the log's plaintext content in the terminal, confirming the encrypted file was valid before the original was deleted. That content has intentionally not been reproduced in this README or in any cropped screenshot — it is reserved for the blind-analysis comparison in **Phase 07**, where the sealed log will be opened and compared against what the investigation actually found. This is noted here for transparency, consistent with this project's practice of documenting the full process rather than only the polished result.
+
+The log will only be reopened after the forensic report is finalized (Phase 07), to compare what was actually done against what the investigation was able to reconstruct.
+
+---
+
+## Step 5 — Memory Dump and Snapshot
+
+Before shutting down the VM, a full memory dump was acquired from the **host**, capturing the state of RAM — including traces of the anti-forensic tools that had already finished executing:
+
+```powershell
+& "C:\Program Files\Oracle\VirtualBox\VBoxManage.exe" list runningvms
+& "C:\Program Files\Oracle\VirtualBox\VBoxManage.exe" debugvm <VM-UUID> dumpvmcore --filename="C:\Tools\memdump.elf"
+```
+
+Result: `memdump.elf`, 8,730,336,996 bytes (~8.7 GB).
+
+A snapshot named `post-attack` was then taken, preserving the exact post-attack state of the VM for the investigation phases that follow:
+
+```powershell
+& "C:\Program Files\Oracle\VirtualBox\VBoxManage.exe" snapshot <VM-UUID> take "post-attack" --description="Snapshot after attack simulation phase, before shutdown"
+```
+
+![Memory dump acquisition and post-attack snapshot](screenshots/07-memory-dump-and-snapshot.png)
+
+The VM was powered off after the snapshot was confirmed.
+
+---
+
+## Attack Simulation Summary
+
+| Action | Status |
 |---|---|
-| Image path | `/mnt/evidence-storage/NEXCHAIN-WS01-DISK01.E01` |
-| Case number | ITI-2026-001 |
-| Description | NexChain Exchange - Insider Threat - Disk Image post-attack |
-| Evidence number | DISK01 |
-| Examiner name | Paulo Vaz |
-| EWF file format | EnCase 6 (.E01) |
-| Compression | deflate, none |
-| Bytes acquired | 50 GiB (53,687,091,200 bytes) |
-
-Acquisition completed in 18 minutes and 37 seconds at ~45 MiB/s (compared to ~7–12 MiB/s on the shared folder before it failed) — confirming the local-disk destination resolved the throughput and stability issue.
-
-```
-Acquiry completed at: Jul 06, 2026 13:05:50
-Written: 50 GiB (53687091388 bytes) in 18 minute(s) and 37 second(s) with 45 MiB/s (48063644 bytes/second).
-MD5 hash calculated over data:          7e5404e298b1d886534a2845e4d880bc
-ewfacquire: SUCCESS
-```
-
-![ewfacquire completed — MD5 hash and SUCCESS](screenshots/04-ewfacquire-success.png)
+| Simulated removable device (VHD) created and mounted | ✅ Complete |
+| KYC dataset created inside `analyst01` session | ✅ Complete |
+| File copied to simulated external device (`E:\`) | ✅ Complete |
+| Original file securely deleted (SDelete, 1-pass) | ✅ Complete |
+| Security event log clearing attempted (`wevtutil`) | ✅ Complete |
+| Timestomping applied to exfiltrated file | ✅ Complete |
+| Attacker actions logged in real time | ✅ Complete |
+| Log sealed with GPG (AES256) | ✅ Complete |
+| Memory dump acquired (pre-shutdown) | ✅ Complete (8.7 GB) |
+| Snapshot `post-attack` taken | ✅ Complete |
+| VM powered off | ✅ Complete |
 
 ---
 
-## Step 5 — Integrity Verification
+*Phase 01 — ITI-2026-001 — NexChain Exchange Insider Threat Investigation*
 
-The acquired E01 image was independently verified against its stored hash using `ewfverify`:
-
-```bash
-sudo ewfverify /mnt/evidence-storage/NEXCHAIN-WS01-DISK01.E01
-```
-
-```
-Verify completed at: Jul 06, 2026 13:23:42
-Read: 50 GiB (53687091200 bytes) in 1 minute(s) and 27 second(s) with 588 MiB/s (617093002 bytes/second).
-MD5 hash stored in file:                7e5404e298b1d886534a2845e4d880bc
-MD5 hash calculated over data:          7e5404e298b1d886534a2845e4d880bc
-ewfverify: SUCCESS
-```
-
-![ewfverify completed — stored and calculated hashes match](screenshots/05-ewfverify-success.png)
-
-The MD5 hash stored in the E01 metadata matches the hash independently recalculated from the acquired data, confirming the image was written without corruption.
-
----
-
-## Step 6 — SHA-256 Hashing
-
-`ewfacquire`/`ewfverify` only compute MD5 by default. To meet a stronger dual-hash standard for the chain of custody, SHA-256 was independently calculated for both the disk image (this phase) and the memory dump (Phase 01), run on the Kali investigator VM:
-
-```bash
-sha256sum /mnt/tools-evidence/memdump.elf
-```
-```
-9e2a212c3a63e484cde27151467fcaa75b9a13aaf3945707b8c8bca2ce14a90e  memdump.elf
-```
-
-![SHA-256 of memdump.elf](screenshots/06-sha256-memdump.png)
-
-```bash
-sha256sum /mnt/evidence-storage/NEXCHAIN-WS01-DISK01.E01
-```
-```
-3d61d7774ca4f85a88077d46ce535debe463f341aff2404cc885dc3471886188  NEXCHAIN-WS01-DISK01.E01
-```
-
-![SHA-256 of NEXCHAIN-WS01-DISK01.E01](screenshots/07-sha256-e01.png)
-
-These SHA-256 values, together with the MD5 already produced by `ewfacquire`/`ewfverify`, are recorded in [`chain-of-custody.md`](../chain-of-custody.md).
-
----
-
-## Acquisition Summary
-
-| Item | Value |
-|---|---|
-| Source | Consolidated clone of `post-attack` snapshot (VirtualBox differential chain) |
-| Acquisition method | Direct block-device read via `qemu-nbd`, `ewfacquire` |
-| Image format | EnCase 6 (.E01) |
-| Image size | 50 GiB (53,687,091,200 bytes) |
-| MD5 hash | `7e5404e298b1d886534a2845e4d880bc` |
-| SHA-256 hash | `3d61d7774ca4f85a88077d46ce535debe463f341aff2404cc885dc3471886188` |
-| Verification | ✅ Passed — hash matches |
-| Acquisition destination | Dedicated local disk (`/mnt/evidence-storage`), not shared folder |
-| Total acquisition time | 18 min 37 sec |
-| Verification time | 1 min 27 sec |
-
----
-
-## Lessons Learned
-
-- **Snapshot chains require consolidation before acquisition.** Working directly with differential VDIs risks corrupting dependencies between them; `VBoxManage clonemedium` safely resolves the full chain into one independent file.
-- **VirtualBox shared folders (`vboxsf`) are unreliable for sustained large writes.** Two acquisition attempts failed mid-write at different completion percentages with different segment-size configurations, ruling out space or segment-boundary causes. A dedicated, locally attached virtual disk resolved the issue and improved throughput roughly 4–6x.
-- **Direct block-device access (`qemu-nbd`) avoids unnecessary intermediate files.** Converting to raw first would have required 50 GiB of scratch space upfront (and failed once already due to insufficient space); acquiring directly from the NBD device made this unnecessary.
-
----
-
-*Phase 02 — ITI-2026-001 — NexChain Exchange Insider Threat Investigation*
-
-**Next:** [Phase 03 — Memory Analysis](../phase03-memory-analysis/README.md)
+**Next:** [Phase 02 — Forensic Acquisition](../phase02-forensic-acquisition/README.md)

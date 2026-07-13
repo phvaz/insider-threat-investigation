@@ -6,6 +6,8 @@ Synthesize the findings from Phases 03 (Memory Analysis) and 04 (Disk Analysis) 
 
 This phase directly supports the "what was found vs. what was missed" comparison planned for the final report (Phase 07), once the sealed attacker log is opened.
 
+> **Standards note.** The interpretation of anti-forensic activity falls under **ISO/IEC 27042** (analysis and interpretation of digital evidence). Framing this activity as part of a broader security incident — where an insider's concealment attempts are themselves part of the event being investigated — aligns with **ISO/IEC 27035** (information security incident management).
+
 ---
 
 ## Technique 1 — Secure File Deletion (SDelete)

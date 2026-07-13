@@ -4,6 +4,8 @@
 
 Analyze the memory dump (`memdump.elf`, 8.7 GiB) acquired in Phase 01, using Volatility 3, to recover evidence of the attacker's actions that may still exist in RAM — even though the anti-forensic tools involved (SDelete, `wevtutil`) had already finished executing by the time the dump was captured.
 
+> **Standards note.** The analysis and interpretation of the memory image follows **ISO/IEC 27042** (analysis and interpretation of digital evidence). The value of this phase also reflects the **RFC 3227** order of volatility: memory, the most volatile source, was captured first (Phase 01) precisely so that evidence like the recovered command history — which does not survive shutdown — could be examined here.
+
 ---
 
 ## Step 1 — System Identification and Symbol Resolution
@@ -15,7 +17,7 @@ cd ~/tools/volatility3
 python3 vol.py -f /media/sf_tools-evidence/memdump.elf windows.info.Info
 ```
 
-The scan confirmed the target as Windows 10 (build 19041, matching the LTSC 21H2 documented in Phase 01), 4 CPUs, and a `SystemTime` of `2026-07-04 16:10:21 UTC` — the moment the dump was captured, used later to cross-reference against the sealed attacker log.
+The scan confirmed the target as Windows 10 (build 19041, matching the LTSC 21H2 documented in Phase 00), 4 CPUs, and a `SystemTime` of `2026-07-04 16:10:21 UTC` — the moment the dump was captured, used later to cross-reference against the sealed attacker log.
 
 This step downloads and caches the matching symbol table locally; subsequent commands against the same dump reuse the cache and run significantly faster.
 
@@ -151,7 +153,7 @@ A single file object reference to `kyc_customers.csv` was found in memory, at of
 |---|---|
 | Active processes | 2 PowerShell sessions identified (15:20:50 and 15:26:06 UTC) |
 | Command-line launch arguments | No arguments — commands were typed interactively |
-| Attacker command history | ✅ Recovered — 11 commands, matching the sealed log from 1 |
+| Attacker command history | ✅ Recovered — 11 commands, matching the sealed log from Phase 01 |
 | Anti-forensic tool execution (SDelete) | ✅ Confirmed via recovered command history |
 | Anti-forensic tool execution (wevtutil) | ✅ Confirmed via recovered command history and executable path |
 | Network exfiltration | ❌ Not found — only routine Microsoft telemetry traffic on NAT interface |
