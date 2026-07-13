@@ -1,211 +1,103 @@
 # Insider Threat Investigation — NexChain Exchange
 
-> **BLUEPRINT — WORK IN PROGRESS**
-> This document is a planning reference. It will be replaced by the final README upon project completion.
+**A full-cycle digital forensic investigation of suspected KYC data exfiltration and anti-forensic activity on a Windows 10 Enterprise system.**
+
+`Case ITI-2026-001` · `Windows 10 LTSC` · `Volatility 3 · The Sleuth Kit` · `ISO/IEC 27037 · NIST SP 800-86 · RFC 3227 · LGPD` · `Status: Complete`
 
 ---
 
-## Case Overview
+## Overview
 
-| Field | Value |
-|---|---|
-| Case reference | ITI-2026-001 |
-| Scenario | Insider threat — suspected data exfiltration at a fictional crypto exchange |
-| Target organization | NexChain Exchange (fictional) |
-| Target system | Windows 10 Enterprise LTSC (clean installation) |
-| Investigator | Paulo Vaz |
-| Status | In progress |
+A compliance analyst at **NexChain Exchange** (a fictional crypto exchange) is suspected of exfiltrating customer KYC data — names, national identifiers (CPF), and cryptocurrency wallet addresses — to an external device before resigning, then using anti-forensic techniques to cover their tracks.
+
+This project investigates that incident end to end: from generating the evidence under controlled conditions, through forensic acquisition and memory/disk analysis, to a formal forensic report — using real tools and industry-standard methodology. It is a self-initiated academic portfolio project.
+
+What sets it apart from a generic DFIR exercise is a deliberate **blind-analysis design**: the attacker's actions were sealed in a GPG-encrypted log *before* the investigation began, and that log was opened only after every finding was finalized — allowing an honest, auditable measure of how complete the investigation actually was.
 
 ---
 
-## Scenario
+## The forensic timeline at a glance
 
-A compliance analyst at NexChain Exchange is suspected of exfiltrating customer KYC data (names, documents, wallet addresses) prior to resignation. The analyst allegedly copied sensitive files to an external device and attempted to cover their tracks using anti-forensic techniques. A forensic investigation was initiated to determine whether exfiltration occurred and reconstruct the full activity timeline.
+![Forensic timeline — ITI-2026-001](phase06-timeline/screenshots/forensic-timeline.png)
 
----
-
-## Lab Environment
-
-| Component | Details |
-|---|---|
-| Host | Windows, Ryzen 7 5700X, 32GB RAM |
-| Hypervisor | VirtualBox 7.2.8 |
-| Target VM | Windows 10 Enterprise LTSC 21H2 — clean install |
-| Attacker account | `analyst01` (standard user) |
-| Admin account | `admin` (local administrator) |
-| Investigator VM | Kali Linux 2026.1 |
-| Network | Host-only (isolated — no internet during attack simulation) |
-| External device | Simulated USB via VHD mounted in VirtualBox |
+All nine events were reconstructed from independent evidence layers (memory, disk metadata, event log) and normalized to UTC. The tight anti-forensic cluster between 15:16–15:26 reveals a deliberate, staged clean-up immediately after exfiltration.
 
 ---
 
-## Tools
+## Key findings
 
-| Tool | Version | Purpose |
-|---|---|---|
-| Autopsy | 4.23.1 | Disk analysis, artifact extraction |
-| The Sleuth Kit (TSK) | 4.14.0 | CLI filesystem analysis, validation |
-| Volatility | 3.x | Memory forensics |
-| Wireshark | 4.6.6 | Network traffic (if applicable) |
-| ewfacquire / ewfverify | 20140816 | E01 forensic acquisition |
-| qemu-img | — | VDI to raw conversion |
-| GPG | — | Sealed attacker log encryption |
-| sdelete (Sysinternals) | — | Anti-forensic tool used by attacker |
+| # | Finding | How it was proven |
+|---|---------|-------------------|
+| 1 | **KYC data was exfiltrated** to a mounted virtual disk (drive E:) | PowerShell command history (memory + disk), USN Journal, memory-resident file object |
+| 2 | **The "USB device" was a virtual disk**, attached internally via the OS — not physical | Registry: absent from USBSTOR, present in SCSI as `Ven_Msft Virtual_Disk` |
+| 3 | **Three anti-forensic techniques used** — secure deletion, log clearing, timestomping — **all detected** | See anti-forensic matrix below |
+| 4 | **Actions attributed to specific accounts** (`analyst01` vs `admin`) | Per-user PowerShell histories recovered from disk |
+| 5 | **Log clearing self-recorded** despite the attacker's attempt | Event ID 1102 — Windows logs its own audit-log clear, naming the account and time |
+| 6 | **Timestomping structurally proven** | NTFS `$SI` vs `$FN` timestamp discrepancy via `istat` |
+| 7 | **100% investigative coverage** | Every sealed-log action independently recovered (blind analysis, Phase 07) |
+
+### Anti-forensic effectiveness
+
+| Technique | What the attacker hid | What exposed it anyway |
+|-----------|----------------------|------------------------|
+| **SDelete** (secure deletion) | Blocked MFT file recovery | USN Journal, Prefetch, command history, memory |
+| **wevtutil** (log clearing) | Destroyed prior log content | Event ID 1102 (self-incriminating), Prefetch, command history |
+| **Timestomping** | Falsified user-facing `$SI` timestamps | `$FN` retained the real time; command history |
+
+Every technique achieved its narrow data-level goal — yet none concealed *that the activity happened*, because each was caught by three or more independent sources.
 
 ---
 
-## Anti-Forensic Techniques Simulated
+## Why this project is relevant to crypto / fintech / financial services
 
-- File deletion with `sdelete` (secure overwrite)
-- Timestomping via PowerShell
-- Attempted Windows Event Log clearing
-- File renaming and compression before exfiltration
+This is a DFIR investigation set squarely in the **crypto-exchange and financial-services context**, and it speaks the sector's language throughout:
+
+- **Insider threat & data exfiltration** — the dominant risk model for exchanges, digital banks, and fintechs holding sensitive customer data.
+- **KYC data as the crown jewels** — the investigation centers on the exact data category (identity + wallet) that these organizations are obligated to protect.
+- **LGPD framing** — the incident is treated as a personal-data breach under Brazil's data-protection law, with the regulatory implications a real exchange would face (risk assessment, potential ANPD and data-subject notification).
+- **Compliance-adjacent forensics** — the analysis combines technical DFIR with the compliance/AML perspective, reflecting how insider-risk investigations actually run inside regulated financial institutions.
+
+*Scope note: this project is a host-based DFIR investigation (memory, disk, registry, file system). It does not include on-chain / blockchain transaction analysis — the wallet data functions as the exfiltrated asset within the scenario, not as the subject of chain tracing.*
 
 ---
 
 ## Methodology
 
-### Phase 00 — Attack Simulation (Attacker perspective)
-- Create KYC dataset (customer records)
-- Copy files to simulated USB device
-- Attempt anti-forensic countermeasures
-- Document all actions in sealed GPG-encrypted log
-- Acquire memory dump before shutdown
-- Take VM snapshot
+Eight phases, from incident generation to formal report. All analysis performed against read-only, hash-verified evidence.
 
-### Phase 01 — Environment Setup (Investigator perspective)
-- VM configuration documentation
-- Network isolation verification
-- Tool verification
+| Phase | Focus |
+|-------|-------|
+| [**00 — Environment Setup**](phase00-environment-setup/) | Two-VM lab (Windows target + Kali investigator), clean baseline snapshot |
+| [**01 — Attack Simulation**](phase01-attack-simulation/) | Incident generated from the attacker's perspective; actions sealed in a GPG log |
+| [**02 — Forensic Acquisition**](phase02-forensic-acquisition/) | Memory dump (pre-shutdown) + E01 disk image, MD5 + SHA-256 verified |
+| [**03 — Memory Analysis**](phase03-memory-analysis/) | Volatility 3 — process list, command history recovered from RAM |
+| [**04 — Disk Analysis**](phase04-disk-analysis/) | TSK — MFT, USN Journal, Prefetch, Event Log, Registry, NTFS timestamps |
+| [**05 — Anti-Forensic Analysis**](phase05-anti-forensic-analysis/) | Effectiveness of each concealment technique vs. what was recovered |
+| [**06 — Timeline Reconstruction**](phase06-timeline/) | Unified, UTC-normalized timeline across all evidence sources |
+| [**07 — Report & Sealed Log Comparison**](phase07-report/) | Blind-analysis comparison + formal forensic report |
 
-### Phase 02 — Forensic Acquisition
-- Memory dump acquisition (pre-shutdown)
-- Disk acquisition — E01 format (MD5 + SHA-256)
-- Hash verification
-- Chain of custody initiated
-
-### Phase 03 — Memory Analysis (Volatility)
-- Process list (`pslist`, `pstree`)
-- Network connections (`netstat`)
-- DLL analysis
-- Evidence of anti-forensic tools in memory
-- Suspicious artifacts
-
-### Phase 04 — Disk Analysis
-- Partition layout
-- Deleted file recovery (TSK + Autopsy)
-- USN Journal (`$UsnJrnl`) — proof of file existence post-deletion
-- Windows Event Logs (Security, System, USB)
-  - Event ID 4663 — file access
-  - Event ID 4688 — process creation
-  - Event ID 6416 — USB device connected
-  - Event ID 1102 — Event Log cleared (if attempted)
-- Registry artifacts — USB device history, UserAssist, ShellBags
-- Browser history — searches related to anti-forensic tools
-- Prefetch — anti-forensic tool execution
-- NTFS timestamp analysis ($SI vs $FN — timestomping detection)
-
-### Phase 05 — Anti-Forensic Analysis
-- Timestomping verification
-- sdelete artifact recovery attempts
-- Event Log tampering evidence
-- What the attacker tried to hide vs. what was recovered
-
-### Phase 06 — Timeline Reconstruction
-- Unified timeline: memory + disk + Event Logs
-- Attacker action sequence reconstructed
-
-### Phase 07 — Report and Sealed Log Comparison
-- Formal forensic report
-- Open sealed GPG log
-- Compare: attacker actions vs. investigator findings
-- Document what was found, what was missed, and why
+**Standards applied:** ISO/IEC 27037 (acquisition/preservation), 27035 (incident management), 27041 (method assurance), 27042 (analysis/interpretation), 27043 (investigation process); NIST SP 800-86 & 800-61 (forensic/incident handling); RFC 3227 (order of volatility); LGPD (personal-data breach context).
 
 ---
 
-## Key Forensic Artifacts (to be confirmed during investigation)
+## Key deliverables
 
-| Artifact | Expected location | Significance |
-|---|---|---|
-| KYC files (or remnants) | `C:\Users\analyst01\` or unallocated | Proof of data in possession |
-| USB device artifacts | Registry `USBSTOR` hive | Proof of external device connection |
-| sdelete execution | Prefetch, Event Log 4688 | Anti-forensic intent |
-| USN Journal entries | `$Extend\$UsnJrnl` | Proof files existed post-deletion |
-| Timestomping evidence | $SI ≠ $FN comparison | Timestamp manipulation |
-| Memory artifacts | Volatility output | Tools/processes active at time of dump |
-| Browser history | Edge/Chrome SQLite | Research on anti-forensic techniques |
+- **[Forensic Report (PDF)](forensic-report-insider-threat.pdf)** — the formal, self-contained report
+- **[Chain of Custody](chain-of-custody.md)** — full evidence-handling record with hashes
+- **Per-phase documentation** — methodology, reasoning, and screenshots for each phase above
 
 ---
 
-## Sealed Attacker Log
+## Lab environment
 
-The attacker's actions will be documented in a plaintext file immediately after the attack simulation phase. This file will be encrypted with GPG before the investigation begins and opened only after the forensic report is finalized.
-
-This methodology ensures investigator objectivity and allows the final report to include a blind analysis comparison: what the investigator found vs. what actually happened.
-
-```bash
-# Encryption (after attack session)
-gpg --symmetric --cipher-algo AES256 attacker-log.txt
-
-# Decryption (after report is finalized)
-gpg --decrypt attacker-log.txt.gpg > attacker-log-revealed.txt
-```
+| Component | Detail |
+|-----------|--------|
+| Target VM | Windows 10 Enterprise LTSC 21H2 (`NEXCHAIN-WS01`) |
+| Investigator VM | Kali Linux 2026.1 |
+| Hypervisor | VirtualBox 7.2.8 (isolated host-only network) |
+| Key tools | Volatility 3 · The Sleuth Kit 4.14.0 · ewfacquire · qemu-nbd · GPG |
+| Evidence | 8.7 GB memory image · 50 GiB E01 disk image (MD5 + SHA-256 verified) |
 
 ---
 
-## Deliverables
-
-| File | Description |
-|---|---|
-| `chain-of-custody.md` | Full evidence handling record |
-| `attacker-log-revealed.txt` | Decrypted attacker log (published post-investigation) |
-| `phase00-attack-simulation/README.md` | Attack methodology (written post-investigation) |
-| `phase01-environment-setup/README.md` | Lab configuration |
-| `phase02-forensic-acquisition/README.md` | Acquisition documentation |
-| `phase03-memory-analysis/README.md` | Volatility findings |
-| `phase04-disk-analysis/README.md` + `findings.md` | Disk artifact analysis |
-| `phase05-anti-forensic-analysis/README.md` | Anti-forensic detection |
-| `phase06-timeline/README.md` | Unified timeline |
-| `phase07-report/README.md` | Report summary |
-| `forensic-report-insider-threat.pdf` | Formal forensic report |
-
----
-
-## Repository Structure (planned)
-
-```
-insider-threat-investigation/
-├── chain-of-custody.md
-├── forensic-report-insider-threat.pdf
-├── README.md
-├── phase00-attack-simulation/
-│   └── README.md
-├── phase01-environment-setup/
-│   ├── README.md
-│   └── screenshots/
-├── phase02-forensic-acquisition/
-│   ├── README.md
-│   └── screenshots/
-├── phase03-memory-analysis/
-│   ├── README.md
-│   ├── findings.md
-│   └── screenshots/
-├── phase04-disk-analysis/
-│   ├── README.md
-│   ├── findings.md
-│   └── screenshots/
-├── phase05-anti-forensic-analysis/
-│   ├── README.md
-│   ├── findings.md
-│   └── screenshots/
-├── phase06-timeline/
-│   ├── README.md
-│   └── forensic-timeline.html
-└── phase07-report/
-    ├── README.md
-    └── forensic-report-insider-threat.pdf
-```
-
----
-
-*Blueprint — ITI-2026-001 — NexChain Exchange Insider Threat Investigation*
+*ITI-2026-001 — NexChain Exchange Insider Threat Investigation. The organization, accounts, and all customer data are fictitious; this is an academic portfolio project conducted in a controlled laboratory.*
