@@ -2,7 +2,7 @@
 
 ## Objective
 
-Synthesize the findings from Phases 03 (Memory Analysis) and 04 (Disk Analysis) into a focused evaluation of the three anti-forensic techniques used in Phase 00: secure file deletion (SDelete), event log clearing (`wevtutil`), and timestamp manipulation (timestomping). Unlike prior phases, this phase does not introduce new tools or commands — it re-examines evidence already collected, organized around a different question: for each technique, what did the attacker successfully hide, and what gave it away anyway?
+Synthesize the findings from Phases 03 (Memory Analysis) and 04 (Disk Analysis) into a focused evaluation of the three anti-forensic techniques used in Phase 01: secure file deletion (SDelete), event log clearing (`wevtutil`), and timestamp manipulation (timestomping). Unlike prior phases, this phase does not introduce new tools or commands — it re-examines evidence already collected, organized around a different question: for each technique, what did the attacker successfully hide, and what gave it away anyway?
 
 This phase directly supports the "what was found vs. what was missed" comparison planned for the final report (Phase 07), once the sealed attacker log is opened.
 
@@ -95,7 +95,7 @@ The `$STANDARD_INFORMATION` ($SI) attribute — the timestamp data exposed to an
 
 ## Notable Gap: Process-Creation Auditing
 
-One environment-level factor limited how much *additional* corroboration could have been gathered: **Event ID 4688 (process creation) auditing was not enabled** during the Phase 01 environment setup, which is the Windows default configuration. Had it been enabled, the Security event log would likely have captured the creation of the `sdelete64.exe` and `wevtutil.exe` processes directly (for any activity occurring after the 15:20:54 log clear) — providing a fourth, independent confirmation source for at least part of the timeline. This is noted here as a methodology observation for future lab iterations, not as an investigative failure — the absence was documented and explained (Phase 04, Step 6) rather than left unexplained.
+One environment-level factor limited how much *additional* corroboration could have been gathered: **Event ID 4688 (process creation) auditing was not enabled** during the Phase 00 environment setup, which is the Windows default configuration. Had it been enabled, the Security event log would likely have captured the creation of the `sdelete64.exe` and `wevtutil.exe` processes directly (for any activity occurring after the 15:20:54 log clear) — providing a fourth, independent confirmation source for at least part of the timeline. This is noted here as a methodology observation for future lab iterations, not as an investigative failure — the absence was documented and explained (Phase 04, Step 6) rather than left unexplained.
 
 ---
 

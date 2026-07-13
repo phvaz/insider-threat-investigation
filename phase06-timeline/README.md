@@ -2,7 +2,7 @@
 
 ## Objective
 
-Consolidate every timestamped event collected across Phases 00, 03, 04, and 05 into a single, unified chronological timeline, cross-referencing artifacts from three independent evidence layers — memory, disk, and the Windows event log — into one coherent sequence. This phase does not generate new evidence; it correlates and normalizes what was already recovered, in line with **ISO/IEC 27042** (analysis and interpretation of digital evidence), for which reliable temporal correlation across heterogeneous sources is a core concern.
+Consolidate every timestamped event collected across Phases 01, 03, 04, and 05 into a single, unified chronological timeline, cross-referencing artifacts from three independent evidence layers — memory, disk, and the Windows event log — into one coherent sequence. This phase does not generate new evidence; it correlates and normalizes what was already recovered, in line with **ISO/IEC 27042** (analysis and interpretation of digital evidence), for which reliable temporal correlation across heterogeneous sources is a core concern.
 
 ---
 

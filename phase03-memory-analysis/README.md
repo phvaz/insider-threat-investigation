@@ -2,7 +2,7 @@
 
 ## Objective
 
-Analyze the memory dump (`memdump.elf`, 8.7 GiB) acquired in Phase 00, using Volatility 3, to recover evidence of the attacker's actions that may still exist in RAM — even though the anti-forensic tools involved (SDelete, `wevtutil`) had already finished executing by the time the dump was captured.
+Analyze the memory dump (`memdump.elf`, 8.7 GiB) acquired in Phase 01, using Volatility 3, to recover evidence of the attacker's actions that may still exist in RAM — even though the anti-forensic tools involved (SDelete, `wevtutil`) had already finished executing by the time the dump was captured.
 
 ---
 
@@ -66,7 +66,7 @@ Both PowerShell sessions were launched with no arguments (`"powershell.exe"`, no
 
 A direct string search across the entire memory dump was run to look for surviving fragments of the attacker's interactive PowerShell session — specifically, the PSReadLine console history buffer, which PowerShell keeps in memory while a session is active.
 
-An initial broad search (`sdelete`/`wevtutil`) returned mostly unrelated Windows kernel function names (`WindowsDeleteString`, `ClfsDeleteMarshallingArea`, etc.) sharing the word "delete" — expected noise when grepping raw memory strings. Refining the search to the specific commands used in Phase 00 isolated the real evidence:
+An initial broad search (`sdelete`/`wevtutil`) returned mostly unrelated Windows kernel function names (`WindowsDeleteString`, `ClfsDeleteMarshallingArea`, etc.) sharing the word "delete" — expected noise when grepping raw memory strings. Refining the search to the specific commands used in Phase 01 isolated the real evidence:
 
 ```bash
 strings -a /media/sf_tools-evidence/memdump.elf | grep -F \
@@ -101,7 +101,7 @@ $file.LastAccessTime = "01/01/2024 08:00:00"
 wevtutil cl Security
 ```
 
-This matches, command for command, the sealed attacker log from Phase 00 — recovered here independently, from volatile memory, without ever decrypting that log. It demonstrates that even though the original file was securely deleted from disk and the Security event log was cleared, the interactive console history survived in RAM until the machine was shut down.
+This matches, command for command, the sealed attacker log from Phase 01 — recovered here independently, from volatile memory, without ever decrypting that log. It demonstrates that even though the original file was securely deleted from disk and the Security event log was cleared, the interactive console history survived in RAM until the machine was shut down.
 
 A second, isolated search confirmed the exact executable path used to clear the event log, likely retained from a Prefetch/AMCache-related in-memory cache:
 
@@ -151,13 +151,13 @@ A single file object reference to `kyc_customers.csv` was found in memory, at of
 |---|---|
 | Active processes | 2 PowerShell sessions identified (15:20:50 and 15:26:06 UTC) |
 | Command-line launch arguments | No arguments — commands were typed interactively |
-| Attacker command history | ✅ Recovered — 11 commands, matching the sealed log from Phase 00 |
+| Attacker command history | ✅ Recovered — 11 commands, matching the sealed log from 1 |
 | Anti-forensic tool execution (SDelete) | ✅ Confirmed via recovered command history |
 | Anti-forensic tool execution (wevtutil) | ✅ Confirmed via recovered command history and executable path |
 | Network exfiltration | ❌ Not found — only routine Microsoft telemetry traffic on NAT interface |
 | File object for `kyc_customers.csv` | ✅ Found (single reference, consistent with the copy on the simulated USB) |
 
-Memory analysis independently corroborated the attacker's actions documented in the sealed log from Phase 00 — without that log ever being decrypted. This will be revisited in Phase 07, when the sealed log is finally opened for a full blind-analysis comparison against everything found across Phases 03–06.
+Memory analysis independently corroborated the attacker's actions documented in the sealed log from Phase 01 — without that log ever being decrypted. This will be revisited in Phase 07, when the sealed log is finally opened for a full blind-analysis comparison against everything found across Phases 03–06.
 
 ---
 

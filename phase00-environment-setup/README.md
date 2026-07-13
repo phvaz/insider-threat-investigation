@@ -1,4 +1,4 @@
-# Phase 01 — Environment Setup
+# Phase 00 — Environment Setup
 
 ## Objective
 
@@ -135,7 +135,7 @@ Before any attack simulation or evidence generation, a snapshot of the clean Win
 
 ![VirtualBox snapshot — clean-install taken before attack simulation](screenshots/04-virtualbox-clean-install-snapshot.png)
 
-This snapshot is the forensic baseline for the investigation. All evidence generated in Phase 00 (attack simulation) will exist in the differential VDI created after this snapshot, not in the base disk — a lesson explicitly learned and documented during the BitTorrent DFIR investigation (BTD-2026-001).
+This snapshot is the forensic baseline for the investigation. All evidence generated during the attack simulation (Phase 01) will exist in the differential VDI created after this snapshot, not in the base disk — a lesson explicitly learned and documented during the BitTorrent DFIR investigation (BTD-2026-001).
 
 ---
 
@@ -178,8 +178,6 @@ Volatility correctly identified the kernel banner (`Linux version 6.18.12+kali-a
 
 ---
 
----
+*Phase 00 — ITI-2026-001 — NexChain Exchange Insider Threat Investigation*
 
-*Phase 01 — ITI-2026-001 — NexChain Exchange Insider Threat Investigation*
-
-**Next:** [Phase 02 — Forensic Acquisition](../phase02-forensic-acquisition/README.md)
+**Next:** [Phase 01 — Attack Simulation](../phase01-attack-simulation/README.md)

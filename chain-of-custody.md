@@ -31,7 +31,7 @@ This case involved only a single examiner throughout, working within an isolated
 | SHA-256 | `9e2a212c3a63e484cde27151467fcaa75b9a13aaf3945707b8c8bca2ce14a90e` |
 | Hash calculated on | Kali investigator VM, via shared folder `tools-evidence` (read-only) |
 | Hash calculated at | 2026-07-06 (Phase 02 wrap-up) |
-| Reference | [Phase 00 — Attack Simulation](phase00-attack-simulation/README.md), Step 5 |
+| Reference | [Phase 01 — Attack Simulation](phase01-attack-simulation/README.md), Step 5 |
 
 ### Item 2 — Disk Image (`NEXCHAIN-WS01-DISK01.E01`)
 
