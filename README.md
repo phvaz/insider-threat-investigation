@@ -14,6 +14,8 @@ This project investigates that incident end to end: from generating the evidence
 
 What sets it apart from a generic DFIR exercise is a deliberate **blind-analysis design**: the attacker's actions were sealed in a GPG-encrypted log *before* the investigation began, and that log was opened only after every finding was finalized — allowing an honest, auditable measure of how complete the investigation actually was.
 
+The forensic report goes beyond listing findings: it formally classifies each piece of evidence by reliability (**primary / corroborative / circumstantial**), ties every stated limitation to its concrete impact on the conclusions, and contextualizes how the methodology supports **evidentiary admissibility** — reflecting the standard of a professional forensic examination rather than a tool walkthrough.
+
 ---
 
 ## The forensic timeline at a glance

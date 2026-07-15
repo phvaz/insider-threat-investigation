@@ -9,7 +9,7 @@ Close the investigation: open the GPG-sealed attacker log created in Phase 01, c
 ## What happened in this phase
 
 - **The sealed log was decrypted.** The GPG-encrypted attacker log, sealed before any analysis began, was opened for the first time only after all findings were finalized — preserving investigator objectivity throughout.
-- **Blind-analysis comparison.** Each recorded attacker action was checked against what the investigation had independently recovered. **Result: 100% of the attacker's actions were independently reconstructed**, most through multiple convergent sources (memory, disk metadata, persistent command history, event log). The comparison is presented in full in Section 10 of the report, along with a measured discussion of what complete recovery does and does not imply.
+- **Blind-analysis comparison.** Each recorded attacker action was checked against what the investigation had independently recovered. **Result: 100% of the attacker's actions were independently reconstructed**, most through multiple convergent sources (memory, disk metadata, persistent command history, event log). The comparison is presented in full in Section 11 of the report, along with a measured discussion of what complete recovery does and does not imply.
 - **Formal report produced.** All phases were synthesized into a single formal forensic report.
 
 ---
@@ -18,7 +18,7 @@ Close the investigation: open the GPG-sealed attacker log created in Phase 01, c
 
 **→ [`forensic-report-insider-threat.pdf`](../forensic-report-insider-threat.pdf)**
 
-The report is self-contained and covers: identification, executive summary, objectives, methodology and standards, case description, evidence and chain of custody, the unified timeline, full technical analysis (memory, disk, registry), anti-forensic analysis, the blind-analysis comparison, conclusions, limitations, recommendations, and the examiner declaration.
+The report is self-contained and covers: identification, executive summary, objectives, methodology and standards, case description, evidence and chain of custody, the unified timeline, full technical analysis (memory, disk, registry), anti-forensic analysis, a formal **evidence reliability assessment** (primary / corroborative / circumstantial classification), the blind-analysis comparison, **legal admissibility context**, conclusions, limitations (each with its impact on the conclusions), recommendations, and the examiner declaration.
 
 Standards referenced throughout: **ISO/IEC 27037, 27035, 27041, 27042, 27043 · NIST SP 800-86, 800-61 · RFC 3227 · LGPD**.
 
