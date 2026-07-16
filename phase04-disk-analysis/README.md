@@ -106,6 +106,8 @@ ls -la "/mnt/ntfs_analysis/Windows/Prefetch/" | grep -i "sdelete\|wevtutil"
 
 Both `SDELETE64.EXE-6548E1FA.pf` (11:11) and `WEVTUTIL.EXE-EF5861C4.pf` (11:20) were found, confirming execution of both tools independent of any log or memory artifact. **Deeper Prefetch parsing (run count, full embedded path via a dedicated tool) was considered and deliberately skipped** — the execution path was already known from other sources (memory strings, command history below), and the marginal value of a specialized parser did not justify the setup cost at this stage.
 
+**Note on displayed time zone.** As with the `istat` readings in Step 11, the modification times shown by `ls -la` on this NTFS mount are rendered in the Kali investigator VM's configured local zone — EDT (UTC-4) — not a native artifact zone. Converted to UTC (15:11 and 15:20 respectively), both readings corroborate independently-dated events: the `wevtutil` execution aligns with Event ID 1102 (15:20:54 UTC, Step 6) to within one minute, and the SDelete execution aligns with the sealed log's ~15:16 UTC entry to within five minutes — consistent with that log's stated minute-level precision. These Prefetch times are used here only to confirm *that* each tool ran; they are not relied upon as the authoritative timing source for any conclusion.
+
 ---
 
 ## Step 6 — Windows Event Log: Security.evtx

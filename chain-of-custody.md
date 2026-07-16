@@ -23,9 +23,9 @@ This case involved only a single examiner throughout, working within an isolated
 
 | Field | Value |
 |---|---|
-| Description | Full RAM capture of `windows-10-dfir-target`, taken immediately after attack simulation, before VM shutdown |
+| Description | Full RAM capture of `windows-10-dfir-target`. The attack simulation (Phase 01) was performed on 2026-07-04; the VM was then **saved (suspended to a saved state), not shut down**, preserving volatile memory intact. The VM was resumed on 2026-07-06 and the memory captured before shutdown. Because the guest was suspended rather than powered off, the interactive PowerShell command history from the 07-04 session survived in RAM and was recovered in Phase 03. |
 | Acquisition tool | `VBoxManage debugvm ... dumpvmcore` |
-| Acquisition date/time | 2026-07-06 13:21 (host time) |
+| Acquisition date/time | 2026-07-06 13:21 (host time, BRT/UTC-3). Note: the memory image's internal `SystemTime` reads 2026-07-04 16:10:21 UTC — the guest clock reflects the saved-state moment from the attack-simulation day, which is expected and is why the image's internal timestamp predates the acquisition date. |
 | Acquired by | Paulo Vaz, from host (outside target VM) |
 | File size | 8,730,336,996 bytes (~8.7 GiB) |
 | Original location | `C:\Tools\memdump.elf` (host) |
@@ -66,12 +66,14 @@ This case involved only a single examiner throughout, working within an isolated
 | 2026-07-04 12:21 | `wevtutil cl Security` executed (anti-forensic action, attacker perspective) | Paulo Vaz (as `admin`) |
 | 2026-07-04 12:33 | Timestomping applied to exfiltrated file | Paulo Vaz (as `analyst01`) |
 | 2026-07-04 ~12:40 | Attacker actions log sealed with GPG (AES256); plaintext original deleted | Paulo Vaz (host) |
-| 2026-07-06 13:21 | Memory dump acquired from host, VM still running | Paulo Vaz (host) |
-| 2026-07-06 ~13:22 | Snapshot `post-attack` taken; VM powered off | Paulo Vaz (host) |
+| 2026-07-04 ~12:45 | VM **suspended to a saved state** (not powered off), preserving volatile memory intact for later acquisition | Paulo Vaz (host) |
+| 2026-07-06 ~13:20 | VM **resumed** from the saved state; guest clock still reflects the 07-04 suspension moment | Paulo Vaz (host) |
+| 2026-07-06 13:21 (host, BRT) | Memory dump acquired from host, VM running after resume | Paulo Vaz (host) |
+| 2026-07-06 ~13:22 (host, BRT) | Snapshot `post-attack` taken; VM powered off | Paulo Vaz (host) |
 | 2026-07-06 (Phase 02) | Snapshot chain consolidated via `VBoxManage clonemedium` | Paulo Vaz (host) |
 | 2026-07-06 (Phase 02) | Consolidated VDI connected read-only via `qemu-nbd` on Kali investigator VM | Paulo Vaz (Kali) |
-| 2026-07-06 13:05:50 | Disk image acquired (E01), MD5 hash generated | Paulo Vaz (Kali) |
-| 2026-07-06 13:23:42 | Disk image integrity verified (`ewfverify`), MD5 match confirmed | Paulo Vaz (Kali) |
+| 2026-07-06 13:05:50 (Kali, EDT) | Disk image acquired (E01), MD5 hash generated | Paulo Vaz (Kali) |
+| 2026-07-06 13:23:42 (Kali, EDT) | Disk image integrity verified (`ewfverify`), MD5 match confirmed | Paulo Vaz (Kali) |
 | 2026-07-06 (Phase 02 wrap-up) | SHA-256 calculated for both memory dump and disk image | Paulo Vaz (Kali) |
 
 ---
@@ -89,6 +91,7 @@ This case involved only a single examiner throughout, working within an isolated
 
 ## Notes
 
+- **Time zones in this timeline.** Host-side actions (memory dump, snapshot) are recorded in the host's local zone, BRT (UTC-3); Kali-side actions (disk acquisition and verification) in the Kali VM's local zone, EDT (UTC-4). Read at face value the disk acquisition (13:05:50) appears to precede the memory dump (13:21), which would invert the order of volatility — but this is a zone artifact, not a sequencing error. Normalized to UTC the true order is correct and volatile-first: memory dump 16:21 → snapshot 16:22 → disk acquisition 17:05:50 → disk verification 17:23:42. Volatile memory was captured before the disk image, per RFC 3227.
 - The memory dump (`memdump.elf`) had only SHA-256 calculated independently; no MD5 was generated for it at acquisition time (`VBoxManage debugvm` does not compute a hash automatically). This is noted here as a minor procedural gap — for future phases, memory dumps should have both hashes generated immediately after acquisition, before any further handling.
 - Two disk acquisition attempts failed mid-write due to I/O instability in the VirtualBox shared folder (`vboxsf`) used as the initial output destination. This is documented in detail in [Phase 02](phase02-forensic-acquisition/README.md), Step 3. No evidence was lost or corrupted as a result — the failed partial files were discarded before the successful acquisition began.
 - All hash values in this document were independently verified by the examiner and cross-checked against tool output shown in the corresponding phase screenshots.

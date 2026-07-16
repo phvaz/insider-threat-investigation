@@ -15,6 +15,7 @@ The evidence in this case originated from sources recording time in three differ
 | Sealed attacker log (host) | BRT (UTC-3) | Written manually on the Brazilian host machine |
 | Event Log, Volatility (`pslist`, `windows.info`) | UTC | Windows event logs and memory structures store/report in UTC natively |
 | The Sleuth Kit (`istat`) | EDT (UTC-4) | TSK rendered the NTFS timestamps in the tool's configured local zone |
+| Prefetch (`ls -la` on Kali NTFS mount) | EDT (UTC-4) | Rendered by the Kali file-listing utility in the same local zone as `istat`, since both ran on the same investigator VM (used only for tool-execution confirmation, not as a primary timing source) |
 
 To place all events on one comparable axis, **every timestamp was normalized to UTC** — the standard reference frame for forensic reporting, which removes ambiguity when correlating events that were originally recorded in different zones.
 
