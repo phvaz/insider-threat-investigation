@@ -16,7 +16,7 @@ Close the investigation: open the GPG-sealed attacker log created in Phase 01, c
 
 ## Deliverable
 
-**→ [`forensic-report-insider-threat.pdf`](../forensic-report-insider-threat.pdf)**
+**→ [`forensic-report-insider-threat.pdf`](../phase07-report/forensic-report-insider-threat.pdf)**
 
 The report is self-contained and covers: identification, executive summary, objectives, methodology and standards, case description, evidence and chain of custody, the unified timeline, full technical analysis (memory, disk, registry), anti-forensic analysis, a formal **evidence reliability assessment** (primary / corroborative / circumstantial classification), the blind-analysis comparison, **legal admissibility context**, conclusions, limitations (each with its impact on the conclusions), recommendations, and the examiner declaration.
 
